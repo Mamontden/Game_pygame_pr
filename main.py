@@ -4,8 +4,11 @@ import sys
 import sqlite3
 from datetime import datetime
 
-
 pygame.init()
+pygame.mixer.init()
+
+explosion_sound = pygame.mixer.Sound("Sounds/explosion.mp3")
+explosion_sound.set_volume(0.5)  # Настройка громкости
 
 # Константы
 SCREEN_WIDTH = 800
@@ -20,29 +23,30 @@ GRID_OFFSET_Y = SCREEN_HEIGHT - BLOCK_SIZE * GRID_HEIGHT - 50
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 COLORS = [
-    (0, 255, 255),  # I
-    (255, 165, 0),  # L
-    (0, 0, 255),  # J
-    (255, 255, 0),  # O
-    (128, 0, 128),  # T
-    (255, 0, 0),  # Z
-    (0, 255, 0)  # S
+    (0, 255, 255),
+    (255, 165, 0),
+    (0, 0, 255),
+    (255, 255, 0),
+    (128, 0, 128),
+    (255, 0, 0),
+    (0, 255, 0)
 ]
 
 # Фигуры
 SHAPES = [
-    [[1, 1, 1, 1]],  # I
-    [[1, 0], [1, 0], [1, 1]],  # L
-    [[0, 1], [0, 1], [1, 1]],  # J
-    [[1, 1], [1, 1]],  # O
-    [[1, 1, 1], [0, 1, 0]],  # T
-    [[1, 1, 0], [0, 1, 1]],  # Z
-    [[0, 1, 1], [1, 1, 0]]  # S
+    [[1, 1, 1, 1]],
+    [[1, 0], [1, 0], [1, 1]],
+    [[0, 1], [0, 1], [1, 1]],
+    [[1, 1], [1, 1]],
+    [[1, 1, 1], [0, 1, 0]],
+    [[1, 1, 0], [0, 1, 1]],
+    [[0, 1, 1], [1, 1, 0]]
 ]
+
 
 # Инициализация базы данных
 def init_db():
-    conn = sqlite3.connect("tetris_scores.db")
+    conn = sqlite3.connect("data/tetris_scores.db")
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS scores (
@@ -56,6 +60,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 # Сохранение результата в базу данных
 def save_score(player_name, score, level):
     conn = sqlite3.connect("tetris_scores.db")
@@ -63,7 +68,7 @@ def save_score(player_name, score, level):
     cursor.execute("""
         INSERT INTO scores (player_name, score, level, date)
         VALUES (?, ?, ?, ?)
-    """, (player_name, score, level, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    """, (player_name, score, level, datetime.now().strftime("%d.%m.%Y")))
     conn.commit()
     conn.close()
 
@@ -74,6 +79,7 @@ class Block(pygame.sprite.Sprite):
         self.image = pygame.Surface((BLOCK_SIZE - 1, BLOCK_SIZE - 1))
         self.image.fill(color)
         self.rect = self.image.get_rect(topleft=(x, y))
+
 
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -97,6 +103,7 @@ class Explosion(pygame.sprite.Sprite):
             else:
                 self.image = self.frames[self.current_frame]
 
+
 class Tetris:
     def __init__(self):
         self.grid = [[0] * GRID_WIDTH for _ in range(GRID_HEIGHT)]
@@ -110,7 +117,8 @@ class Tetris:
         self.new_piece()
 
     def draw_border(self, screen):
-        pygame.draw.rect(screen, WHITE, (GRID_OFFSET_X - 2, GRID_OFFSET_Y - 2, GRID_WIDTH * BLOCK_SIZE + 4, GRID_HEIGHT * BLOCK_SIZE + 4), 2)
+        pygame.draw.rect(screen, WHITE, (
+        GRID_OFFSET_X - 2, GRID_OFFSET_Y - 2, GRID_WIDTH * BLOCK_SIZE + 4, GRID_HEIGHT * BLOCK_SIZE + 4), 2)
 
     def draw_next_piece(self, screen):
         if self.next_piece:
@@ -136,12 +144,21 @@ class Tetris:
     def new_piece(self):
         if not self.next_piece:
             self.next_piece = random.choice(range(len(SHAPES)))
+
+        # Создаем новую фигуру
         self.current_piece = {
             'shape': SHAPES[self.next_piece],
             'color': COLORS[self.next_piece],
             'x': GRID_WIDTH // 2 - len(SHAPES[self.next_piece][0]) // 2,
             'y': 0
         }
+
+        # Проверяем, может ли фигура быть размещена на поле
+        if self.check_collision(self.current_piece['shape'], (self.current_piece['x'], self.current_piece['y'])):
+            self.game_over = True  # Если фигура не может быть размещена, игра завершается
+            return
+
+        # Выбираем следующую фигуру
         self.next_piece = random.choice(range(len(SHAPES)))
 
     def check_collision(self, shape, offset):
@@ -179,9 +196,11 @@ class Tetris:
         for y, row in enumerate(shape):
             for x, cell in enumerate(row):
                 if cell:
+                    # Если фигура выходит за пределы поля, игра завершается
                     if self.current_piece['y'] + y < 0:
                         self.game_over = True
                         return
+                    # Размещаем фигуру на поле
                     self.grid[self.current_piece['y'] + y][self.current_piece['x'] + x] = self.current_piece['color']
                     block = Block(
                         self.current_piece['color'],
@@ -189,6 +208,8 @@ class Tetris:
                         GRID_OFFSET_Y + (self.current_piece['y'] + y) * BLOCK_SIZE
                     )
                     self.all_sprites.add(block)
+
+        # Очищаем заполненные строки и создаем новую фигуру
         self.clear_lines()
         self.new_piece()
 
@@ -201,6 +222,7 @@ class Tetris:
                 lines_cleared += 1
 
         if rows_to_remove:
+            # Удаляем заполненные строки и создаем взрывы
             for y in rows_to_remove:
                 for x in range(GRID_WIDTH):
                     for block in self.all_sprites:
@@ -209,17 +231,23 @@ class Tetris:
                                 GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
                         ):
                             block.kill()
-                    explosion = Explosion(
-                        GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
-                        GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
-                    )
-                    self.explosions.add(explosion)
+                        explosion = Explosion(
+                            GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
+                            GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
+                        )
+                        self.explosions.add(explosion)
+                        explosion_sound.play()  # Воспроизведение звука взрыва
 
+            # Перемещаем оставшиеся строки вниз
             for y in reversed(range(GRID_HEIGHT)):
-                if y < rows_to_remove[-1]:
-                    self.grid[y + lines_cleared] = self.grid[y]
-                    self.grid[y] = [0] * GRID_WIDTH
+                if y in rows_to_remove:
+                    continue  # Пропускаем удаленные строки
+                new_y = y + lines_cleared
+                if new_y < GRID_HEIGHT:
+                    self.grid[new_y] = self.grid[y]
+                self.grid[y] = [0] * GRID_WIDTH
 
+            # Обновляем спрайты
             self.all_sprites.empty()
             for y in range(GRID_HEIGHT):
                 for x in range(GRID_WIDTH):
@@ -231,6 +259,7 @@ class Tetris:
                         )
                         self.all_sprites.add(block)
 
+            # Обновляем счет и уровень
             self.score += [40, 100, 300, 1200][lines_cleared - 1] * self.level
             self.level = 1 + self.score // 1000
             global fall_speed
@@ -266,6 +295,8 @@ class Tetris:
         self.explosions.draw(screen)
         self.draw_next_piece(screen)
         self.draw_score_and_level(screen)
+
+
 class NameInputScreen:
     def __init__(self):
         self.font = pygame.font.Font(None, 74)
@@ -287,6 +318,8 @@ class NameInputScreen:
                 self.input_text = self.input_text[:-1]
             else:
                 self.input_text += event.unicode
+
+
 class MainMenu:
     def __init__(self):
         self.font = pygame.font.Font(None, 74)
@@ -309,6 +342,7 @@ class MainMenu:
             if event.key == pygame.K_RETURN:
                 return self.selected
         return None
+
 
 class GameOverScreen:
     def __init__(self, score):
@@ -338,6 +372,50 @@ class GameOverScreen:
                 return self.selected
         return None
 
+
+# таблица рекордов
+class HighScoresScreen:
+    def __init__(self):
+        self.font = pygame.font.Font(None, 36)
+        self.options = ["Главное меню"]
+        self.selected = 0
+
+    def draw(self, screen):
+        screen.fill(BLACK)
+        title_text = self.font.render("Таблица рекордов", True, WHITE)
+        screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 50))
+
+        # Получаем данные из базы данных
+        conn = sqlite3.connect("data/tetris_scores.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT player_name, score, level, date FROM scores ORDER BY score DESC LIMIT 10")
+        scores = cursor.fetchall()
+        conn.close()
+
+        # Отображаем записи
+        y_offset = 150
+        for i, (player_name, score, level, date) in enumerate(scores):
+            score_text = self.font.render(f"{i + 1}. {player_name}: {score} (Уровень {level}) - {date}", True, WHITE)
+            screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, y_offset))
+            y_offset += 50
+
+        # Отображаем опции
+        for i, option in enumerate(self.options):
+            color = WHITE if i == self.selected else (128, 128, 128)
+            text = self.font.render(option, True, color)
+            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, y_offset + 100 + i * 50))
+
+    def handle_input(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.selected = (self.selected - 1) % len(self.options)
+            if event.key == pygame.K_DOWN:
+                self.selected = (self.selected + 1) % len(self.options)
+            if event.key == pygame.K_RETURN:
+                return self.selected
+        return None
+
+
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Tetris")
@@ -355,7 +433,7 @@ def main():
                 sys.exit()
             selected = menu.handle_input(event)
             if selected is not None:
-                if selected == 0:  # Начало игры
+                if selected == 0:  # Новая игра
                     # Экран ввода имени
                     name_input = NameInputScreen()
                     while name_input.active:
@@ -416,7 +494,7 @@ def main():
                                 sys.exit()
                             selected = game_over_screen.handle_input(event)
                             if selected is not None:
-                                if selected == 0:  # Заново
+                                if selected == 0:  # заново
                                     break
                                 if selected == 1:  # Главное меню
                                     break
@@ -424,16 +502,35 @@ def main():
                             break
                         game_over_screen.draw(screen)
                         pygame.display.flip()
-                    if selected == 1:  # Вернуться в меню
-                        break
-                elif selected == 1:  # Рекорды
 
-                    pass
-                elif selected == 2:  # Quit
+                    if selected == 1:  # Вернуться в меню
+                        continue  # Возвращаемся в главное меню
+                    elif selected == 0:  # Заново
+                        continue  # Запускаем новую игру
+
+
+                elif selected == 1:  # Таблица рекордов
+                    high_scores_screen = HighScoresScreen()
+                    selected_option = None  # Инициализация переменной
+                    while True:
+                        for event in pygame.event.get():
+                            if event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()
+                            selected_option = high_scores_screen.handle_input(event)
+                            if selected_option is not None:
+                                if selected_option == 0:  # Главное меню
+                                    break
+                        if selected_option is not None:
+                            break
+                        high_scores_screen.draw(screen)
+                        pygame.display.flip()
+                elif selected == 2:  # Выход
                     pygame.quit()
                     sys.exit()
         menu.draw(screen)
         pygame.display.flip()
+
 
 if __name__ == "__main__":
     main()
