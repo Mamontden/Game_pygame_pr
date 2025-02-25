@@ -114,6 +114,7 @@ class Tetris:
         self.game_over = False
         self.all_sprites = pygame.sprite.Group()
         self.explosions = pygame.sprite.Group()
+        self.paused = False
         self.new_piece()
 
     def draw_border(self, screen):
@@ -472,28 +473,35 @@ def main():
                                     fast_fall = True  # Ускоренное падение
                                 if event.key == pygame.K_UP:
                                     game.rotate()
+                                if event.key == pygame.K_SPACE:  # Пауза на пробел
+                                    game.paused = not game.paused
                             if event.type == pygame.KEYUP:
                                 if event.key == pygame.K_DOWN:
-                                    fast_fall = False
+                                    fast_fall = False  # Отключение ускоренного падения
 
-                        delta_time = clock.tick(60)
-                        fall_time += delta_time
+                        if not game.paused:  # Если игра не на паузе
+                            delta_time = clock.tick(60)
+                            fall_time += delta_time
 
-                        # Ускоренное падение, если клавиша вниз нажата
-                        if fast_fall:
-                            fall_speed_fast = 100
-                            if fall_time >= fall_speed_fast:
-                                game.drop()
-                                fall_time = 0
-                        else:
-                            if fall_time >= fall_speed:
-                                game.drop()
-                                fall_time = 0
+                            # Ускоренное падение, если клавиша вниз нажата
+                            if fast_fall:
+                                fall_speed_fast = 100  # Скорость падения при ускорении
+                                if fall_time >= fall_speed_fast:
+                                    game.drop()
+                                    fall_time = 0
+                            else:
+                                if fall_time >= fall_speed:
+                                    game.drop()
+                                    fall_time = 0
 
-                        game.all_sprites.update()
-                        game.explosions.update()
+                            game.all_sprites.update()
+                            game.explosions.update()
 
                         game.draw(screen)
+                        if game.paused:  # Если игра на паузе, отображаем сообщение
+                            font = pygame.font.Font(None, 74)
+                            pause_text = font.render("Пауза", True, WHITE)
+                            screen.blit(pause_text, (SCREEN_WIDTH // 2 - pause_text.get_width() // 2, SCREEN_HEIGHT // 2))
                         pygame.display.flip()
 
                     # Сохранение результата
@@ -543,7 +551,6 @@ def main():
                     sys.exit()
         menu.draw(screen)
         pygame.display.flip()
-
 
 if __name__ == "__main__":
     main()
