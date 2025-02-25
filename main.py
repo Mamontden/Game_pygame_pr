@@ -474,14 +474,14 @@ def main():
                                     game.rotate()
                             if event.type == pygame.KEYUP:
                                 if event.key == pygame.K_DOWN:
-                                    fast_fall = False  # Отключение ускоренного падения
+                                    fast_fall = False
 
                         delta_time = clock.tick(60)
                         fall_time += delta_time
 
                         # Ускоренное падение, если клавиша вниз нажата
                         if fast_fall:
-                            fall_speed_fast = 100  # Скорость падения при ускорении
+                            fall_speed_fast = 100
                             if fall_time >= fall_speed_fast:
                                 game.drop()
                                 fall_time = 0
@@ -548,5 +548,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-if __name__ == "__main__":
-    main()
