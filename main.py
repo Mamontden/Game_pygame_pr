@@ -63,7 +63,7 @@ def init_db():
 
 # Сохранение результата в базу данных
 def save_score(player_name, score, level):
-    conn = sqlite3.connect("tetris_scores.db")
+    conn = sqlite3.connect("data/tetris_scores.db")
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO scores (player_name, score, level, date)
