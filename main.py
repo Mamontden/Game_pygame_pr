@@ -136,8 +136,8 @@ class Tetris:
 
     def draw_score_and_level(self, screen):
         font = pygame.font.Font(None, 36)
-        score_text = font.render(f"Score: {self.score}", True, WHITE)
-        level_text = font.render(f"Level: {self.level}", True, WHITE)
+        score_text = font.render(f"Счет: {self.score}", True, WHITE)
+        level_text = font.render(f"Уровень: {self.level}", True, WHITE)
         screen.blit(score_text, (SCREEN_WIDTH - 150, 200))
         screen.blit(level_text, (SCREEN_WIDTH - 150, 250))
 
