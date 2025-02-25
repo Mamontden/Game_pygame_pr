@@ -455,6 +455,9 @@ def main():
                     global fall_speed
                     fall_speed = 1000
 
+                    # Переменная для отслеживания состояния клавиши вниз
+                    fast_fall = False
+
                     while not game.game_over:
                         for event in pygame.event.get():
                             if event.type == pygame.QUIT:
@@ -466,15 +469,26 @@ def main():
                                 if event.key == pygame.K_RIGHT:
                                     game.move(1, 0)
                                 if event.key == pygame.K_DOWN:
-                                    game.drop()
+                                    fast_fall = True  # Ускоренное падение
                                 if event.key == pygame.K_UP:
                                     game.rotate()
+                            if event.type == pygame.KEYUP:
+                                if event.key == pygame.K_DOWN:
+                                    fast_fall = False  # Отключение ускоренного падения
 
                         delta_time = clock.tick(60)
                         fall_time += delta_time
-                        if fall_time >= fall_speed:
-                            game.drop()
-                            fall_time = 0
+
+                        # Ускоренное падение, если клавиша вниз нажата
+                        if fast_fall:
+                            fall_speed_fast = 100  # Скорость падения при ускорении
+                            if fall_time >= fall_speed_fast:
+                                game.drop()
+                                fall_time = 0
+                        else:
+                            if fall_time >= fall_speed:
+                                game.drop()
+                                fall_time = 0
 
                         game.all_sprites.update()
                         game.explosions.update()
@@ -508,7 +522,6 @@ def main():
                     elif selected == 0:  # Заново
                         continue  # Запускаем новую игру
 
-
                 elif selected == 1:  # Таблица рекордов
                     high_scores_screen = HighScoresScreen()
                     selected_option = None  # Инициализация переменной
@@ -531,6 +544,9 @@ def main():
         menu.draw(screen)
         pygame.display.flip()
 
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
