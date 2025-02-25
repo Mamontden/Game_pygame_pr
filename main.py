@@ -265,6 +265,10 @@ class Tetris:
             self.level = 1 + self.score // 1000
             global fall_speed
             fall_speed = max(100, 1000 - (self.level - 1) * 100)
+            # Отладочный вывод сетки
+            # print("Сетка после удаления строк:")
+            # for row in self.grid:
+            #     print(row)
 
     def draw(self, screen):
         screen.fill(BLACK)
