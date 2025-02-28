@@ -43,6 +43,7 @@ SHAPES = [
     [[0, 1, 1], [1, 1, 0]]
 ]
 
+
 # Инициализация базы данных
 def init_db():
     conn = sqlite3.connect("data/tetris_scores.db")
@@ -76,7 +77,7 @@ def save_score(player_name, score, level, mode):
 class Block(pygame.sprite.Sprite):
     def __init__(self, color=None, image=None, x=0, y=0, value=None):
         super().__init__()
-        self.base_image = image.copy() if image else pygame.Surface((BLOCK_SIZE-1, BLOCK_SIZE-1))
+        self.base_image = image.copy() if image else pygame.Surface((BLOCK_SIZE - 1, BLOCK_SIZE - 1))
         if color:
             self.base_image.fill(color)
         self.image = self.base_image.copy()
@@ -95,6 +96,7 @@ class Block(pygame.sprite.Sprite):
     def update_value(self, new_value):
         self.value = new_value
         self.add_text(str(new_value))
+
 
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -134,7 +136,7 @@ class Tetris:
 
     def draw_border(self, screen):
         pygame.draw.rect(screen, WHITE, (
-        GRID_OFFSET_X - 2, GRID_OFFSET_Y - 2, GRID_WIDTH * BLOCK_SIZE + 4, GRID_HEIGHT * BLOCK_SIZE + 4), 2)
+            GRID_OFFSET_X - 2, GRID_OFFSET_Y - 2, GRID_WIDTH * BLOCK_SIZE + 4, GRID_HEIGHT * BLOCK_SIZE + 4), 2)
 
     def draw_next_piece(self, screen):
         if self.next_piece:
@@ -321,7 +323,6 @@ class TetrisMath:
         self.examples = self.load_examples("data/examples.txt")
         self.cube_texture = pygame.image.load("Sprites/cube.png").convert_alpha()
         self.cube_texture = pygame.transform.scale(self.cube_texture, (BLOCK_SIZE, BLOCK_SIZE))
-
         self.grid = [[{'texture': None, 'value': None} for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
         self.score = 0
         self.level = 1
@@ -330,6 +331,7 @@ class TetrisMath:
         self.all_sprites = pygame.sprite.Group()
         self.explosions = pygame.sprite.Group()
         self.paused = False
+        self.piece_count = 0  # Счетчик фигур
         self.new_piece()
 
     def draw_score_and_level(self, screen):
@@ -357,6 +359,7 @@ class TetrisMath:
         rotated = list(zip(*reversed(shape)))
         if not self.check_collision(rotated, (self.current_piece['x'], self.current_piece['y'])):
             self.current_piece['shape'] = rotated
+
     def load_examples(self, filename):
         try:
             with open(filename, "r") as file:
@@ -388,26 +391,25 @@ class TetrisMath:
 
         self.check_merge()
         self.check_explosions()
-        self.clear_lines()
         self.new_piece()
 
     def check_explosions(self):
-        # Проверяем все кубики на поле
+        # Проверка кубиков
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 if self.grid[y][x]['value'] and self.grid[y][x]['value'] >= 1000:
-                    # Создаем взрыв
+                    # взрыв
                     self.create_explosion(x, y)
-                    # Удаляем кубик
+                    # Удаление кубика
                     self.grid[y][x] = {'texture': None, 'value': None}
-                    # Удаляем спрайт
+                    # Удаление спрайта
                     for block in self.all_sprites:
                         if block.rect.collidepoint(
                                 GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
                                 GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
                         ):
                             block.kill()
-                    # Добавляем очки
+                    # очки
                     self.score += 1000
 
     def create_explosion(self, x, y):
@@ -422,7 +424,6 @@ class TetrisMath:
         lines_cleared = 0
         rows_to_remove = []
 
-        # Убираем логику взрывов при очистке линий
         for y in range(GRID_HEIGHT):
             if all(cell['texture'] is not None for cell in self.grid[y]):
                 rows_to_remove.append(y)
@@ -432,10 +433,8 @@ class TetrisMath:
             # Только удаление строк без взрывов
             new_grid = [row for i, row in enumerate(self.grid) if i not in rows_to_remove]
             new_grid = [[{'texture': None, 'value': None} for _ in range(GRID_WIDTH)]
-                      for _ in range(lines_cleared)] + new_grid
+                        for _ in range(lines_cleared)] + new_grid
             self.grid = new_grid
-
-            # Обновляем спрайты
             self.all_sprites.empty()
             for y in range(GRID_HEIGHT):
                 for x in range(GRID_WIDTH):
@@ -447,6 +446,7 @@ class TetrisMath:
                             value=self.grid[y][x]['value']
                         )
                         self.all_sprites.add(block)
+
     def check_merge(self):
         merged = False
         for y in range(GRID_HEIGHT - 2, -1, -1):
@@ -478,7 +478,6 @@ class TetrisMath:
         if merged:
             self.check_merge()
 
-
     def load_examples(self, filename):
         try:
             with open(filename, "r") as file:
@@ -489,26 +488,43 @@ class TetrisMath:
             return ["2+2", "3*3", "5-1"]
 
     def new_piece(self):
-        if not self.examples:
-            self.examples = self.load_examples("data/examples.txt")
+        self.piece_count += 1  # нужен для отсчета 10 фигур. После этого примеры гарантировано генерируются с результатом
+        # из верхнего слоя кубиков
+        if self.piece_count >= 10:
+            # Собираем значения из верхних 5 рядов
+            existing_values = []
+            for y in range(min(5, GRID_HEIGHT)):
+                for x in range(GRID_WIDTH):
+                    if self.grid[y][x]['value'] is not None:
+                        existing_values.append(self.grid[y][x]['value'])
 
-        example = self.examples.pop(0) if self.examples else "0+0"
-        try:
-            answer = eval(example)
-        except:
-            answer = 0
+            if existing_values:
+                target = random.choice(existing_values)
+                example = f"{target} + 0"  # Простой пример с гарантированным ответом
+                answer = target
+            else:
+                example = "1 + 1"
+                answer = 2
+        else:
+            # Берем пример из списка
+            if not self.examples:
+                self.examples = self.load_examples("data/examples.txt")
+            example = self.examples.pop(0) if self.examples else "0+0"
+            try:
+                answer = eval(example)
+            except:
+                answer = 0
 
         self.current_piece = {
             'shape': [[1, 1]],
             'texture': self.cube_texture,
-            'x': GRID_WIDTH // 2 - 2,
+            'x': GRID_WIDTH // 2 - 1,  # Центрирование для формы 2x1
             'y': 0,
             'example': example,
             'answer': answer
         }
 
-        if self.check_collision(self.current_piece['shape'],
-                                (self.current_piece['x'], self.current_piece['y'])):
+        if self.check_collision(self.current_piece['shape'], (self.current_piece['x'], self.current_piece['y'])):
             self.game_over = True
 
     def check_collision(self, shape, offset):
@@ -547,7 +563,6 @@ class TetrisMath:
                             GRID_OFFSET_Y + (piece['y'] + y) * BLOCK_SIZE
                         ))
 
-
         # Отрисовка блоков
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
@@ -568,7 +583,6 @@ class TetrisMath:
                         )
                         screen.blit(text, text_rect)
 
-
         # Отображение текущего примера
         font = pygame.font.Font(None, 36)
         if self.current_piece:
@@ -582,10 +596,17 @@ class TetrisMath:
             GRID_WIDTH * BLOCK_SIZE + 4,
             GRID_HEIGHT * BLOCK_SIZE + 4
         ), 2)
+
+
 class GameModeSelection:
     def __init__(self):
         self.font = pygame.font.Font(None, 74)
-        self.options = ["Классический Тетрис", "Тетрис с примерами"]
+        self.options = [
+            "Классический Тетрис",
+            "Тетрис с примерами",
+            "Таблица рекордов",
+            "Выход"
+        ]
         self.selected = 0
 
     def draw(self, screen):
@@ -593,7 +614,8 @@ class GameModeSelection:
         for i, option in enumerate(self.options):
             color = WHITE if i == self.selected else (128, 128, 128)
             text = self.font.render(option, True, color)
-            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100 + i * 100))
+            screen.blit(text, (SCREEN_WIDTH//2 - text.get_width()//2,
+                            SCREEN_HEIGHT//2 - 150 + i*75))  # Уменьшаем расстояние
 
     def handle_input(self, event):
         if event.type == pygame.KEYDOWN:
@@ -742,7 +764,7 @@ def main():
                 pygame.quit()
                 sys.exit()
             selected = mode_selection.handle_input(event)
-            if selected is not None:
+            if selected == 0 or selected == 1:
                 if selected == 0:  # Классический Тетрис
                     game = Tetris()
                 elif selected == 1:  # Тетрис с примерами
@@ -842,10 +864,30 @@ def main():
                     continue  # Возвращаемся в главное меню
                 elif selected == 0:  # Заново
                     continue  # Запускаем новую игру
+            elif selected == 2:  # Таблица рекордов
+                # Показ таблицы рекордов
+                high_scores = HighScoresScreen()
+                while True:
+                    for e in pygame.event.get():
+                        if e.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                        result = high_scores.handle_input(e)
+                        if result is not None:  # Нажата кнопка "Назад"
+                            break
 
+                    high_scores.draw(screen)
+                    pygame.display.flip()
+                    clock.tick(60)
+
+
+            elif selected == 3:  # Выход
+                pygame.quit()
+                sys.exit()
         mode_selection.draw(screen)
         pygame.display.flip()
+        clock.tick(60)
+
 
 if __name__ == "__main__":
     main()
-
