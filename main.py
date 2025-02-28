@@ -382,7 +382,7 @@ class TetrisMath:
                         image=self.cube_texture,
                         x=GRID_OFFSET_X + gx * BLOCK_SIZE,
                         y=GRID_OFFSET_Y + gy * BLOCK_SIZE,
-                        value=self.current_piece['answer']  # Это вызовет add_text
+                        value=self.current_piece['answer']
                     )
                     self.all_sprites.add(block)
 
@@ -572,7 +572,7 @@ class TetrisMath:
         # Отображение текущего примера
         font = pygame.font.Font(None, 36)
         if self.current_piece:
-            example_text = font.render(f"Реши: {self.current_piece['example']}", True, WHITE)
+            example_text = font.render(f"Пример: {self.current_piece['example']}", True, WHITE)
             screen.blit(example_text, (20, 20))
 
     def draw_border(self, screen):
@@ -728,7 +728,7 @@ class HighScoresScreen:
 
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Tetris")
+    pygame.display.set_caption("Тетрис")
     clock = pygame.time.Clock()
 
     # Инициализация базы данных
@@ -771,6 +771,7 @@ def main():
                 # Переменная для отслеживания состояния клавиши вниз
                 fast_fall = False
 
+                # оновной цикл
                 while not game.game_over:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
