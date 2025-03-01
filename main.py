@@ -3,6 +3,8 @@ import random
 import sys
 import sqlite3
 from datetime import datetime
+import tkinter as tk
+from tkinter import filedialog
 
 pygame.init()
 pygame.mixer.init()
@@ -139,15 +141,22 @@ class Tetris:
             GRID_OFFSET_X - 2, GRID_OFFSET_Y - 2, GRID_WIDTH * BLOCK_SIZE + 4, GRID_HEIGHT * BLOCK_SIZE + 4), 2)
 
     def draw_next_piece(self, screen):
-        if self.next_piece:
+        if self.next_piece is not None:
             shape = SHAPES[self.next_piece]
             color = COLORS[self.next_piece]
+            shape_width = len(shape[0])
+            shape_height = len(shape)
+
+
+            start_x = SCREEN_WIDTH - 150 + (4 - shape_width) * BLOCK_SIZE // 2
+            start_y = 50 + (4 - shape_height) * BLOCK_SIZE // 2
+
             for y, row in enumerate(shape):
                 for x, cell in enumerate(row):
                     if cell:
                         pygame.draw.rect(screen, color, (
-                            SCREEN_WIDTH - 150 + x * BLOCK_SIZE,
-                            50 + y * BLOCK_SIZE,
+                            start_x + x * BLOCK_SIZE,
+                            start_y + y * BLOCK_SIZE,
                             BLOCK_SIZE - 1,
                             BLOCK_SIZE - 1
                         ))
@@ -319,8 +328,8 @@ class Tetris:
 
 
 class TetrisMath:
-    def __init__(self):
-        self.examples = self.load_examples("data/examples.txt")
+    def __init__(self, custom_examples=None, explosion_threshold=1000):
+        self.explosion_threshold = explosion_threshold
         self.cube_texture = pygame.image.load("Sprites/cube.png").convert_alpha()
         self.cube_texture = pygame.transform.scale(self.cube_texture, (BLOCK_SIZE, BLOCK_SIZE))
         self.grid = [[{'texture': None, 'value': None} for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
@@ -331,9 +340,15 @@ class TetrisMath:
         self.all_sprites = pygame.sprite.Group()
         self.explosions = pygame.sprite.Group()
         self.paused = False
-        self.piece_count = 0  # Счетчик фигур
-        self.new_piece()
+        self.piece_count = 0
 
+
+        if custom_examples:
+            self.examples = custom_examples
+        else:
+            self.examples = self.load_examples("data/examples.txt")
+
+        self.new_piece()
     def draw_score_and_level(self, screen):
         font = pygame.font.Font(None, 36)
         score_text = font.render(f"Счет: {self.score}", True, WHITE)
@@ -397,7 +412,7 @@ class TetrisMath:
         # Проверка кубиков
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if self.grid[y][x]['value'] and self.grid[y][x]['value'] >= 1000:
+                if self.grid[y][x]['value'] and self.grid[y][x]['value'] >= self.explosion_threshold:
                     # взрыв
                     self.create_explosion(x, y)
                     # Удаление кубика
@@ -480,12 +495,20 @@ class TetrisMath:
 
     def load_examples(self, filename):
         try:
-            with open(filename, "r") as file:
-                examples = file.readlines()
-            return [ex.strip() for ex in examples]
+            with open(filename, "r", encoding='utf-8') as file:
+                examples = []
+                for line in file:
+                    line = line.strip()
+                    if line:  # Пропускаем пустые строки
+                        try:
+                            eval(line)  # Проверка валидности примера
+                            examples.append(line)
+                        except:
+                            print(f"Некорректный пример: {line}")
+                return examples
         except FileNotFoundError:
             print(f"Файл {filename} не найден!")
-            return ["2+2", "3*3", "5-1"]
+            return ["2+2", "3*3", "5-1", "8-3"]
 
     def new_piece(self):
         self.piece_count += 1  # нужен для отсчета 10 фигур. После этого примеры гарантировано генерируются с результатом
@@ -518,7 +541,7 @@ class TetrisMath:
         self.current_piece = {
             'shape': [[1, 1]],
             'texture': self.cube_texture,
-            'x': GRID_WIDTH // 2 - 1,  # Центрирование для формы 2x1
+            'x': GRID_WIDTH // 2 - 1,
             'y': 0,
             'example': example,
             'answer': answer
@@ -604,10 +627,13 @@ class GameModeSelection:
         self.options = [
             "Классический Тетрис",
             "Тетрис с примерами",
+            "Загрузить примеры",
             "Таблица рекордов",
-            "Выход"
+            "Выход",
+            "Порог взрыва (текущий: 1000)"
         ]
         self.selected = 0
+        self.explosion_threshold = 1000
 
     def draw(self, screen):
         screen.fill(BLACK)
@@ -616,6 +642,11 @@ class GameModeSelection:
             text = self.font.render(option, True, color)
             screen.blit(text, (SCREEN_WIDTH//2 - text.get_width()//2,
                             SCREEN_HEIGHT//2 - 150 + i*75))  # Уменьшаем расстояние
+            #Уведомление о загрузке
+            if hasattr(self, 'loaded_status'):
+                status_font = pygame.font.Font(None, 36)
+                status_text = status_font.render(self.loaded_status, True, WHITE)
+                screen.blit(status_text, (20, SCREEN_HEIGHT - 50))
 
     def handle_input(self, event):
         if event.type == pygame.KEYDOWN:
@@ -625,6 +656,44 @@ class GameModeSelection:
                 self.selected = (self.selected + 1) % len(self.options)
             if event.key == pygame.K_RETURN:
                 return self.selected
+        return None
+
+# Выбор порога взрыва в тетрисе с примерами
+class ThresholdSelection:
+    def __init__(self, current_threshold):
+        self.font = pygame.font.Font(None, 74)
+        self.options = [
+            "100",
+            "500",
+            "1000",
+            "2000",
+            "Назад"
+        ]
+        self.selected = 0
+        self.current_threshold = current_threshold
+
+    def draw(self, screen):
+        screen.fill(BLACK)
+        title = self.font.render("Выберите порог взрыва", True, WHITE)
+        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 100))
+
+        for i, option in enumerate(self.options):
+            color = WHITE if i == self.selected else (128, 128, 128)
+            text = self.font.render(option, True, color)
+            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2,
+                               200 + i * 100))
+
+    def handle_input(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.selected = (self.selected - 1) % len(self.options)
+            if event.key == pygame.K_DOWN:
+                self.selected = (self.selected + 1) % len(self.options)
+            if event.key == pygame.K_RETURN:
+                if self.selected == 4:  # Назад
+                    return None
+                else:
+                    return int(self.options[self.selected])
         return None
 
 # Ввод имени.
@@ -651,29 +720,6 @@ class NameInputScreen:
             else:
                 self.input_text += event.unicode
 
-
-class MainMenu:
-    def __init__(self):
-        self.font = pygame.font.Font(None, 74)
-        self.options = ["Начать играть", "Таблица рекордов", "Выход"]
-        self.selected = 0
-
-    def draw(self, screen):
-        screen.fill(BLACK)
-        for i, option in enumerate(self.options):
-            color = WHITE if i == self.selected else (128, 128, 128)
-            text = self.font.render(option, True, color)
-            screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100 + i * 100))
-
-    def handle_input(self, event):
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                self.selected = (self.selected - 1) % len(self.options)
-            if event.key == pygame.K_DOWN:
-                self.selected = (self.selected + 1) % len(self.options)
-            if event.key == pygame.K_RETURN:
-                return self.selected
-        return None
 
 
 class GameOverScreen:
@@ -752,6 +798,9 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Тетрис")
     clock = pygame.time.Clock()
+    #хранение загруженных примеров
+
+    custom_examples = None
 
     # Инициализация базы данных
     init_db()
@@ -764,11 +813,45 @@ def main():
                 pygame.quit()
                 sys.exit()
             selected = mode_selection.handle_input(event)
+            if selected == 2:  # "Загрузить примеры"
+                # Вызов диалогового окна
+                root = tk.Tk()
+                root.withdraw()
+                file_path = filedialog.askopenfilename(
+                    title="Выберите файл с примерами",
+                    filetypes=[("Текстовые файлы", "*.txt")]
+                )
+                root.destroy() #закрываем tk
+
+                if file_path:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            custom_examples = [line.strip() for line in f if line.strip()]
+                    except Exception as e:
+                        print(f"Ошибка загрузки файла: {e}")
+                continue
+            if selected == 5:  # Пункт "Порог взрыва"
+                threshold_menu = ThresholdSelection(mode_selection.explosion_threshold)
+                while True:
+                    for e in pygame.event.get():
+                        result = threshold_menu.handle_input(e)
+                        if result is not None:
+                            if isinstance(result, int):
+                                mode_selection.explosion_threshold = result
+                                mode_selection.options[3] = f"Порог взрыва (текущий: {result})"
+                            break
+                    else:
+                        threshold_menu.draw(screen)
+                        pygame.display.flip()
+                        clock.tick(60)
+                        continue
+                    break
+                continue
             if selected == 0 or selected == 1:
                 if selected == 0:  # Классический Тетрис
                     game = Tetris()
                 elif selected == 1:  # Тетрис с примерами
-                    game = TetrisMath()
+                    game = TetrisMath(custom_examples=custom_examples if custom_examples else None)
 
                 # Экран ввода имени
                 name_input = NameInputScreen()
@@ -843,28 +926,39 @@ def main():
                 save_score(player_name, game.score, game.level, "classic" if selected == 0 else "math")
 
                 # Экран Game Over
-                game_over_screen = GameOverScreen(game.score)
-                while True:
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            pygame.quit()
-                            sys.exit()
-                        selected = game_over_screen.handle_input(event)
-                        if selected is not None:
-                            if selected == 0:  # заново
-                                break
-                            if selected == 1:  # Главное меню
-                                break
-                    if selected is not None:
-                        break
-                    game_over_screen.draw(screen)
-                    pygame.display.flip()
+                if game.game_over:
+                    # Сохранение результата
+                    save_score(player_name, game.score, game.level, "classic" if selected == 0 else "math")
 
-                if selected == 1:  # Вернуться в меню
-                    continue  # Возвращаемся в главное меню
-                elif selected == 0:  # Заново
-                    continue  # Запускаем новую игру
-            elif selected == 2:  # Таблица рекордов
+                    # Экран Game Over
+                    game_over_screen = GameOverScreen(game.score)
+                    while True:
+                        for event in pygame.event.get():
+                            if event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()
+                            selected_option = game_over_screen.handle_input(event)
+                            if selected_option is not None:
+                                if selected_option == 0:  # Новая игра
+                                    # Перезапуск игры
+                                    if mode_selection.options[selected] == "Классический Тетрис":
+                                        game = Tetris()
+                                    else:
+                                        game = TetrisMath()
+                                    # Сброс параметров
+                                    fall_speed = 1000
+                                    game_over = False
+                                    break
+                                elif selected_option == 1:  # Главное меню
+                                    break
+                        else:
+                            # Отрисовка экрана Game Over
+                            game_over_screen.draw(screen)
+                            pygame.display.flip()
+                            clock.tick(60)
+                            continue
+                        break
+            elif selected == 3:  # Таблица рекордов
                 # Показ таблицы рекордов
                 high_scores = HighScoresScreen()
                 while True:
@@ -873,15 +967,21 @@ def main():
                             pygame.quit()
                             sys.exit()
                         result = high_scores.handle_input(e)
-                        if result is not None:  # Нажата кнопка "Назад"
+                        if result == 0:  # Нажата кнопка "Главное меню"
                             break
+                    else:
+                        high_scores.draw(screen)
+                        pygame.display.flip()
+                        clock.tick(60)
+                        continue
+                    break
 
                     high_scores.draw(screen)
                     pygame.display.flip()
                     clock.tick(60)
 
 
-            elif selected == 3:  # Выход
+            elif selected == 4:  # Выход
                 pygame.quit()
                 sys.exit()
         mode_selection.draw(screen)
