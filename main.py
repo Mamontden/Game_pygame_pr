@@ -262,7 +262,7 @@ class Tetris:
                             GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
                         )
                         self.explosions.add(explosion)
-                        explosion_sound.play()  # Воспроизведение звука взрыва
+                        explosion_sound.play()
 
             # Падение оставшихся строк вниз
             for y in reversed(range(GRID_HEIGHT)):
@@ -341,14 +341,11 @@ class TetrisMath:
         self.explosions = pygame.sprite.Group()
         self.paused = False
         self.piece_count = 0
-
-
-        if custom_examples:
-            self.examples = custom_examples
-        else:
-            self.examples = self.load_examples("data/examples.txt")
-
+        self.examples_dict = {}
+        # Исправленный вызов метода с двумя аргументами
+        self.load_examples("data/examples.txt", custom_examples)
         self.new_piece()
+
     def draw_score_and_level(self, screen):
         font = pygame.font.Font(None, 36)
         score_text = font.render(f"Счет: {self.score}", True, WHITE)
@@ -375,13 +372,34 @@ class TetrisMath:
         if not self.check_collision(rotated, (self.current_piece['x'], self.current_piece['y'])):
             self.current_piece['shape'] = rotated
 
-    def load_examples(self, filename):
-        try:
-            with open(filename, "r") as file:
-                return [line.strip() for line in file]
-        except FileNotFoundError:
-            return ["2+2", "3*3", "5-1"]
-
+    def load_examples(self, default_path, custom_examples=None):
+        self.examples_dict = {}
+        if custom_examples is not None:
+            # Загружаем только пользовательские примеры, если они есть
+            for example_line in custom_examples:
+                example_line = example_line.strip()
+                if '=' in example_line:
+                    example, answer = example_line.split('=', 1)
+                    example = example.strip()
+                    try:
+                        self.examples_dict[example] = int(answer.strip())
+                    except ValueError:
+                        print(f"Некорректный ответ в примере: {example_line}")
+        else:
+            # Загружаем примеры из файла по умолчанию
+            try:
+                with open(default_path, "r", encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if '=' in line:
+                            example, answer = line.split('=', 1)
+                            example = example.strip()
+                            try:
+                                self.examples_dict[example] = int(answer.strip())
+                            except ValueError:
+                                print(f"Некорректный ответ в примере: {line}")
+            except FileNotFoundError:
+                print(f"Файл {default_path} не найден!")
     def lock_piece(self):
         shape = self.current_piece['shape']
         for y, row in enumerate(shape):
@@ -435,121 +453,102 @@ class TetrisMath:
         self.explosions.add(explosion)
         explosion_sound.play()
 
-    def clear_lines(self):
-        lines_cleared = 0
-        rows_to_remove = []
 
+    #Подсчет кубиков на поле.
+    def count_blocks(self):
+        count = 0
         for y in range(GRID_HEIGHT):
-            if all(cell['texture'] is not None for cell in self.grid[y]):
-                rows_to_remove.append(y)
-                lines_cleared += 1
-
-        if rows_to_remove:
-            # Только удаление строк без взрывов
-            new_grid = [row for i, row in enumerate(self.grid) if i not in rows_to_remove]
-            new_grid = [[{'texture': None, 'value': None} for _ in range(GRID_WIDTH)]
-                        for _ in range(lines_cleared)] + new_grid
-            self.grid = new_grid
-            self.all_sprites.empty()
-            for y in range(GRID_HEIGHT):
-                for x in range(GRID_WIDTH):
-                    if self.grid[y][x]['texture']:
-                        block = Block(
-                            image=self.cube_texture,
-                            x=GRID_OFFSET_X + x * BLOCK_SIZE,
-                            y=GRID_OFFSET_Y + y * BLOCK_SIZE,
-                            value=self.grid[y][x]['value']
-                        )
-                        self.all_sprites.add(block)
+            for x in range(GRID_WIDTH):
+                if self.grid[y][x]['value'] is not None:
+                    count += 1
+        return count
 
     def check_merge(self):
         merged = False
-        for y in range(GRID_HEIGHT - 2, -1, -1):
+        for y in range(GRID_HEIGHT - 1, 0, -1):
             for x in range(GRID_WIDTH):
                 current = self.grid[y][x]
-                if not current['texture']:
-                    continue
-                below = self.grid[y + 1][x]
-                if below['texture'] and current['value'] == below['value']:
-                    # Объединение значений
-                    new_value = current['value'] + below['value']
-                    self.grid[y + 1][x]['value'] = new_value
-                    self.grid[y][x] = {'texture': None, 'value': None}
+                below = self.grid[y - 1][x]
 
-                    # Обновление спрайтов
+                if current['value'] and current['value'] == below['value']:
+                    new_value = current['value'] + below['value']
+                    self.grid[y][x]['value'] = new_value
+                    self.grid[y - 1][x] = {'texture': None, 'value': None}
+
+                    # Обновление спрайта
                     for block in self.all_sprites:
                         if block.rect.collidepoint(
-                                GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
-                                GRID_OFFSET_Y + (y + 1) * BLOCK_SIZE + BLOCK_SIZE // 2
+                                GRID_OFFSET_X + x * BLOCK_SIZE,
+                                GRID_OFFSET_Y + y * BLOCK_SIZE
                         ):
                             block.update_value(new_value)
-                            self.score += new_value
-                        if block.rect.collidepoint(
-                                GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
-                                GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
-                        ):
-                            block.kill()
                     merged = True
-        if merged:
-            self.check_merge()
 
-    def load_examples(self, filename):
-        try:
-            with open(filename, "r", encoding='utf-8') as file:
-                examples = []
-                for line in file:
-                    line = line.strip()
-                    if line:  # Пропускаем пустые строки
-                        try:
-                            eval(line)  # Проверка валидности примера
-                            examples.append(line)
-                        except:
-                            print(f"Некорректный пример: {line}")
-                return examples
-        except FileNotFoundError:
-            print(f"Файл {filename} не найден!")
-            return ["2+2", "3*3", "5-1", "8-3"]
+        if merged:
+            self.check_explosions()
 
     def new_piece(self):
-        self.piece_count += 1  # нужен для отсчета 10 фигур. После этого примеры гарантировано генерируются с результатом
-        # из верхнего слоя кубиков
-        if self.piece_count >= 10:
-            # Собираем значения из верхних 5 рядов
-            existing_values = []
-            for y in range(min(5, GRID_HEIGHT)):
-                for x in range(GRID_WIDTH):
-                    if self.grid[y][x]['value'] is not None:
-                        existing_values.append(self.grid[y][x]['value'])
+        existing_values = []
 
-            if existing_values:
-                target = random.choice(existing_values)
-                example = f"{target} + 0"  # Простой пример с гарантированным ответом
+        # Собираем значение кубиков
+        if self.count_blocks() >= 10:
+            for y in range(GRID_HEIGHT):
+                for x in range(GRID_WIDTH):
+                    value = self.grid[y][x].get('value')
+                    if value is not None:
+                        existing_values.append(value)
+
+
+            unique_values = list(set(existing_values))
+            if unique_values:
+                # Случайное значение из собранных
+                target = random.choice(unique_values)
+
+                # Случайный тип примеров
+                example_type = random.choice(["add", "sub", "simple"])
+
+                if example_type == "add":
+                    a = random.randint(0, self.explosion_threshold // 2)
+                    b = random.randint(0, self.explosion_threshold // 2)
+                    example = f"{a} + {b}"
+                    answer = a + b
+                elif example_type == "sub":
+                    a = target + random.randint(0, 100)
+                    b = a - target
+                    example = f"{a} - {b}"
+                else:
+                    example = f"{target} + 0"
+
                 answer = target
-            else:
-                example = "1 + 1"
-                answer = 2
+                self.current_piece = {
+                    'shape': [[1]],
+                    'texture': self.cube_texture,
+                    'x': GRID_WIDTH // 2,
+                    'y': 0,
+                    'example': example,
+                    'answer': answer
+                }
+                return
+
+
+        if self.examples_dict:
+            example, answer = random.choice(list(self.examples_dict.items()))
         else:
-            # Берем пример из списка
-            if not self.examples:
-                self.examples = self.load_examples("data/examples.txt")
-            example = self.examples.pop(0) if self.examples else "0+0"
-            try:
-                answer = eval(example)
-            except:
-                answer = 0
+            example = "0 + 0"
+            answer = 0
 
         self.current_piece = {
-            'shape': [[1, 1]],
+            'shape': [[1]],
             'texture': self.cube_texture,
-            'x': GRID_WIDTH // 2 - 1,
+            'x': GRID_WIDTH // 2,
             'y': 0,
             'example': example,
             'answer': answer
         }
 
-        if self.check_collision(self.current_piece['shape'], (self.current_piece['x'], self.current_piece['y'])):
+        if self.check_collision(self.current_piece['shape'],
+                                (self.current_piece['x'], self.current_piece['y'])):
             self.game_over = True
-
     def check_collision(self, shape, offset):
         dx, dy = offset
         for y, row in enumerate(shape):
@@ -563,14 +562,6 @@ class TetrisMath:
                         return True
         return False
 
-    # Пока убрал, но удалять не стал, так при модификации игры может понадобится
-    def draw_next_piece(self, screen):
-        pass
-        # # Отображение примера в вверхнем правом углу
-        # font = pygame.font.Font(None, 36)
-        # if self.current_piece:
-        #     text = font.render(f"Реши: {self.current_piece['example']}", True, WHITE)
-        #     screen.blit(text, (20, 20))
 
     def draw(self, screen):
         screen.fill(BLACK)
@@ -641,7 +632,7 @@ class GameModeSelection:
             color = WHITE if i == self.selected else (128, 128, 128)
             text = self.font.render(option, True, color)
             screen.blit(text, (SCREEN_WIDTH//2 - text.get_width()//2,
-                            SCREEN_HEIGHT//2 - 150 + i*75))  # Уменьшаем расстояние
+                            SCREEN_HEIGHT//2 - 150 + i*75))
             #Уведомление о загрузке
             if hasattr(self, 'loaded_status'):
                 status_font = pygame.font.Font(None, 36)
@@ -851,7 +842,8 @@ def main():
                 if selected == 0:  # Классический Тетрис
                     game = Tetris()
                 elif selected == 1:  # Тетрис с примерами
-                    game = TetrisMath(custom_examples=custom_examples if custom_examples else None)
+                    game = TetrisMath(
+                        custom_examples=custom_examples, explosion_threshold=mode_selection.explosion_threshold)
 
                 # Экран ввода имени
                 name_input = NameInputScreen()
