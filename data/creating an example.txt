@@ -1,0 +1,19 @@
+s = """"""
+for i in range(0, 500):
+    for j in range(0, 500):
+        s+=f"{i}+{j}={i+j}"
+        s +="\n"
+        
+
+for i in range(0, 500):
+    for j in range(i, 500):
+        s+=f"{j}-{i}={j-i}"
+        s +="\n"
+        
+for i in range(0, 30):
+    for j in range(0, 30):
+        s+=f"{j}*{i}={i*j}"
+        s +="\n"
+
+with open("examples.txt", "w") as f:
+    f.write(s)
