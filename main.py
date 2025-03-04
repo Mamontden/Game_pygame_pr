@@ -342,9 +342,30 @@ class TetrisMath:
         self.paused = False
         self.piece_count = 0
         self.examples_dict = {}
-        # Исправленный вызов метода с двумя аргументами
         self.load_examples("data/examples.txt", custom_examples)
+        self.add_initial_blocks() #добавил 10 случайных кубиков, иначе в начале совсем скучно
         self.new_piece()
+
+    # добавление кубиков в начале игры
+    def add_initial_blocks(self):
+        for _ in range(10):
+            while True:
+                x = random.randint(0, GRID_WIDTH - 1)
+                y = random.randint(GRID_HEIGHT // 2, GRID_HEIGHT - 1)  # Спавн в нижней половине
+                if self.grid[y][x]['value'] is None:
+                    value = random.randint(1, self.explosion_threshold - 1)
+                    self.grid[y][x] = {
+                        'texture': self.cube_texture,
+                        'value': value
+                    }
+                    block = Block(
+                        image=self.cube_texture,
+                        x=GRID_OFFSET_X + x * BLOCK_SIZE,
+                        y=GRID_OFFSET_Y + y * BLOCK_SIZE,
+                        value=value
+                    )
+                    self.all_sprites.add(block)
+                    break
 
     def draw_score_and_level(self, screen):
         font = pygame.font.Font(None, 36)
