@@ -427,29 +427,49 @@ class TetrisMath:
         self.new_piece()
 
     def check_explosions(self):
-        # Проверка кубиков
+        explosions_to_create = []
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 if self.grid[y][x]['value'] and self.grid[y][x]['value'] >= self.explosion_threshold:
-                    # взрыв
-                    self.create_explosion(x, y)
-                    # Удаление кубика
+                    explosions_to_create.append((x, y))
                     self.grid[y][x] = {'texture': None, 'value': None}
-                    # Удаление спрайта
-                    for block in self.all_sprites:
-                        if block.rect.collidepoint(
-                                GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
-                                GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
-                        ):
-                            block.kill()
-                    # очки
                     self.score += 1000
+        for block in self.all_sprites.sprites():
+            grid_x = (block.rect.x - GRID_OFFSET_X) // BLOCK_SIZE
+            grid_y = (block.rect.y - GRID_OFFSET_Y) // BLOCK_SIZE
+            if (grid_x, grid_y) in explosions_to_create:
+                block.kill()
+        for x, y in explosions_to_create:
+            self.create_explosion(x, y)
+        self.all_sprites.empty()
+        for y in range(GRID_HEIGHT):
+            for x in range(GRID_WIDTH):
+                if self.grid[y][x]['value'] is not None:
+                    block = Block(
+                        image=self.cube_texture,
+                        x=GRID_OFFSET_X + x * BLOCK_SIZE,
+                        y=GRID_OFFSET_Y + y * BLOCK_SIZE,
+                        value=self.grid[y][x]['value']
+                    )
+                    self.all_sprites.add(block)
+        self.all_sprites.empty()
+        for y in range(GRID_HEIGHT):
+            for x in range(GRID_WIDTH):
+                if self.grid[y][x]['value'] is not None:
+                    block = Block(
+                        image=self.cube_texture,
+                        x=GRID_OFFSET_X + x * BLOCK_SIZE,
+                        y=GRID_OFFSET_Y + y * BLOCK_SIZE,
+                        value=self.grid[y][x]['value']
+                    )
+                    self.all_sprites.add(block)
 
     def create_explosion(self, x, y):
-        explosion = Explosion(
-            GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2,
-            GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
-        )
+        # Рассчет координат
+        screen_x = GRID_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE // 2
+        screen_y = GRID_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE // 2
+
+        explosion = Explosion(screen_x, screen_y)
         self.explosions.add(explosion)
         explosion_sound.play()
 
@@ -471,21 +491,20 @@ class TetrisMath:
                 below = self.grid[y - 1][x]
 
                 if current['value'] and current['value'] == below['value']:
+                    #взрыв нижнего кубика. Не уверен что надо
+                    self.create_explosion(x, y - 1)
+
                     new_value = current['value'] + below['value']
                     self.grid[y][x]['value'] = new_value
                     self.grid[y - 1][x] = {'texture': None, 'value': None}
 
-                    # Обновление спрайта
                     for block in self.all_sprites:
                         if block.rect.collidepoint(
                                 GRID_OFFSET_X + x * BLOCK_SIZE,
-                                GRID_OFFSET_Y + y * BLOCK_SIZE
+                                GRID_OFFSET_Y + (y - 1) * BLOCK_SIZE
                         ):
-                            block.update_value(new_value)
+                            block.kill()
                     merged = True
-
-        if merged:
-            self.check_explosions()
 
     def new_piece(self):
         existing_values = []
@@ -559,23 +578,19 @@ class TetrisMath:
             for y, row in enumerate(piece['shape']):
                 for x, cell in enumerate(row):
                     if cell:
-                        # Текстура фигуры
                         screen.blit(piece['texture'], (
                             GRID_OFFSET_X + (piece['x'] + x) * BLOCK_SIZE,
                             GRID_OFFSET_Y + (piece['y'] + y) * BLOCK_SIZE
                         ))
 
-        # Отрисовка блоков
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 cell = self.grid[y][x]
                 if cell['texture']:
-                    # Отрисовка текстуры блока
                     screen.blit(cell['texture'], (
                         GRID_OFFSET_X + x * BLOCK_SIZE,
                         GRID_OFFSET_Y + y * BLOCK_SIZE
                     ))
-                    # Отрисовка значения
                     if cell['value'] is not None:
                         font = pygame.font.Font(None, 24)
                         text = font.render(str(cell['value']), True, WHITE)
@@ -585,11 +600,14 @@ class TetrisMath:
                         )
                         screen.blit(text, text_rect)
 
-        # Отображение текущего примера
+        self.explosions.draw(screen)
+
         font = pygame.font.Font(None, 36)
         if self.current_piece:
             example_text = font.render(f"Пример: {self.current_piece['example']}", True, WHITE)
             screen.blit(example_text, (20, 20))
+
+        self.draw_score_and_level(screen)
 
     def draw_border(self, screen):
         pygame.draw.rect(screen, WHITE, (
@@ -965,6 +983,7 @@ def main():
                 pygame.quit()
                 sys.exit()
         mode_selection.draw(screen)
+
         pygame.display.flip()
         clock.tick(60)
 
