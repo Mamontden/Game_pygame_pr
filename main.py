@@ -504,22 +504,10 @@ class TetrisMath:
                 # Случайное значение из собранных
                 target = random.choice(unique_values)
 
-                # Случайный тип примеров
-                example_type = random.choice(["add", "sub", "simple"])
+                possible_examples = [ex for ex, ans in self.examples_dict.items() if ans == target]
+                example = random.choice(possible_examples)
+                answer = self.examples_dict[example]
 
-                if example_type == "add":
-                    a = random.randint(0, self.explosion_threshold // 2)
-                    b = random.randint(0, self.explosion_threshold // 2)
-                    example = f"{a} + {b}"
-                    answer = a + b
-                elif example_type == "sub":
-                    a = target + random.randint(0, 100)
-                    b = a - target
-                    example = f"{a} - {b}"
-                else:
-                    example = f"{target} + 0"
-
-                answer = target
                 self.current_piece = {
                     'shape': [[1]],
                     'texture': self.cube_texture,
